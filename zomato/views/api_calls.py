@@ -1,18 +1,17 @@
 from rest_framework.decorators import api_view
 from django.http import JsonResponse
 from rest_framework import status
-from ..models import *
 from icecream import ic
 from django.utils import timezone
-from .utilities import *
-from datetime import datetime
-
-
+from drf_yasg.utils import swagger_auto_schema
+from ..serializers import *
+from geopy.distance import geodesic
 
 ic.configureOutput(includeContext=True)
 
 
 # APIs built using Django REST framework
+@swagger_auto_schema(method='post', request_body=UsersSerializer, operation_description="Create a new user")
 @api_view(["POST"])
 def signup(request):
     try:
@@ -23,6 +22,7 @@ def signup(request):
             {"message": "User already registered"},
             status=status.HTTP_400_BAD_REQUEST,
         )
+    except Users.DoesNotExist:
         user_data = Users.objects.create(
             email=email, password=pwd, created_at=timezone.now()
         )
@@ -35,6 +35,7 @@ def signup(request):
             {"message": "Oops some error occured"},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
+
 
 @api_view(["POST"])
 def login(request):
@@ -56,6 +57,7 @@ def login(request):
             {"message": "Oops some error occured"},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
+
 
 @api_view(["POST"])
 def insert_user_details(request):
@@ -119,7 +121,7 @@ def get_restaurant_menu(request):
             {
                 "message": "Menu Fetched Successfully",
                 "restaurant_name": restaurant.name,
-                "menu" : list(menu)
+                "menu": list(menu)
             }
         )
     except Exception as e:
@@ -137,15 +139,15 @@ def get_order_history(request):
             return JsonResponse({"message": "Invalid or Expired Session"}, status=status.HTTP_401_UNAUTHORIZED)
         request.session.set_expiry(300)
         user_id = request.session["user_id"]
-        orders = Orders.objects.filter(fk_user_id=user_id).values()
+        orders = Orders.objects.filter(fk_user_id=user_id)
         order_list = []
         for order in orders:
-            restaurant = Restaurants.objects.get(pk=order.get('fk_restaurant_id'))
-            order_items = OrderContent.objects.filter(fk_order_id=order.get('id')).values()
+            order_items = OrderContent.objects.filter(fk_order_id=order.order_id).values("fk_menu_id", "quantity")
+            restrau_details = Restaurants.objects.filter(pk=order.fk_restaurant_id).values("name", "restaurant_id")
             order_list.append({
-                "order_id": order.get('id'),
-                "restaurant_name": restaurant.name,
-                "items": list(order_items)
+                "order_id": order.order_id,
+                "restaurant_name": restrau_details[0]["name"],
+                "items": list(MenuContent.objects.filter(fk_restaurant_id=restrau_details[0]["restaurant_id"]).values("name", "price"))
             })
         return JsonResponse(
             {
@@ -159,11 +161,6 @@ def get_order_history(request):
             {"message": "Oops some error occured"},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
-
-# TODO: get order details that is menu along with prices and total amount
-# take ispiration from swiggy app
-# @api_view(["GET"])
-# def get_order_details(request):
 
 
 @api_view(["GET"])
@@ -231,53 +228,58 @@ def get_user_details(request):
         )
 
 
-@api_view(["POST"])
-def push_order(request):
-    try:
-        if not request.session.session_key:
-            return JsonResponse({"message": "Invalid or Expired Session"}, status=status.HTTP_401_UNAUTHORIZED)
-        request.session.set_expiry(300)
-        user_id = request.session["user_id"]
-        payment_method = request.data["paymentMethod"]
-        restaurant_id = request.data["restaurantID"]
-        total_amount = request.data["totalAmount"]
-        order = Orders.objects.create(
-            order_total=total_amount,
-            fk_user_id=user_id,
-            payment_method=payment_method,
-            fk_restaurant_id=restaurant_id,
-            order_status="inCart",
-            created_at=timezone.now(),
-        )
-        order_id = order.order_id
-        ic(order_id)
-        items = request.data["items"]
-        for item in items:
-            ic(item)
-            item_id = item["itemID"]
-            quantity = item["quantity"]
-            price = item["price"]
-            item_instance = MenuContent.objects.get(pk=item_id)
-            OrderContent.objects.create(
-                fk_order=order,
-                fk_menu=item_instance,
-                quantity=quantity,
-            )
-        return JsonResponse({"message": "Order Added Successfully"})
-    except Exception as e:
-        ic(e)
-        return JsonResponse(
-            {"message": "Oops some error occured"},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        )
+# @api_view(["POST"])
+# def push_order(request):
+#     try:
+#         if not request.session.session_key:
+#             return JsonResponse({"message": "Invalid or Expired Session"}, status=status.HTTP_401_UNAUTHORIZED)
+#         request.session.set_expiry(300)
+#         user_id = request.session["user_id"]
+#         payment_method = request.data["paymentMethod"]
+#         restaurant_id = request.data["restaurantID"]
+#         total_amount = request.data["totalAmount"]
+#         order = Orders.objects.create(
+#             order_total=total_amount,
+#             fk_user_id=user_id,
+#             payment_method=payment_method,
+#             fk_restaurant_id=restaurant_id,
+#             order_status="inCart",
+#             created_at=timezone.now(),
+#         )
+#         order_id = order.order_id
+#         items = request.data["items"]
+#         for item in items:
+#             ic(item)
+#             item_id = item["itemID"]
+#             quantity = item["quantity"]
+#             price = item["price"]
+#             item_instance = MenuContent.objects.get(pk=item_id)
+#             OrderContent.objects.create(
+#                 fk_order=order,
+#                 fk_menu=item_instance,
+#                 quantity=quantity,
+#             )
+#         return JsonResponse({"message": "Order Added Successfully"})
+#     except Exception as e:
+#         ic(e)
+#         return JsonResponse(
+#             {"message": "Oops some error occured"},
+#             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+#         )
 
 @api_view(["POST"])
-def update_order_status(request):
+def update_order(request):
     try:
         order_id = request.data["orderID"]
         order_status = request.data["orderStatus"]
+        payment_method = request.data.get("paymentMethod", None)
         order = Orders.objects.get(pk=order_id)
         order.order_status = order_status
+        # only runs when an order is moved from cart to placing order
+        if payment_method is not None:
+            delivery_executive = DeliveryExecutives.objects.order_by("?").first()
+            order.fk_delivery_executive = delivery_executive
+            order.payment_method = payment_method
         order.save()
         return JsonResponse({"message": "Order Updated Successfully"})
     except Exception as e:
@@ -287,6 +289,94 @@ def update_order_status(request):
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
-# @api_view(["POST"])
-#     user = authenticate(username='john', password='secret')
-#     if user is not None:
+
+@api_view(["POST"])
+def add_to_cart(request):
+    try:
+        if not request.session.session_key:
+            return JsonResponse({"message": "Invalid or Expired Session"}, status=status.HTTP_401_UNAUTHORIZED)
+        request.session.set_expiry(300)
+        user_id = request.session["user_id"]
+        restaurant_id = request.data["restaurantID"]
+        item_id = request.data["itemID"]
+        if not request.session.has_key("order_id"):    
+            order = Orders.objects.create(
+                fk_user_id=user_id,
+                fk_restaurant_id=restaurant_id,
+                order_status="inCart",
+                created_at=timezone.now(),
+            )
+            request.session["order_id"] = order.order_id
+        order_id = request.session["order_id"]
+        # check if item already exists in cart
+        if OrderContent.objects.filter(fk_order_id=order_id, fk_menu_id=item_id).exists():
+            order_content = OrderContent.objects.get(fk_order_id=order_id, fk_menu_id=item_id)
+            order_content.quantity += 1
+        else:
+            order_content = OrderContent.objects.create(
+                fk_order_id=order_id,
+                fk_menu_id=item_id,
+                quantity=1,
+            )
+        order_content.save()
+        return JsonResponse({"message": "Item Added to Cart Successfully"})
+    except Exception as e:
+        ic(e)
+        return JsonResponse(
+            {"message": "Oops some error occured"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+
+@api_view(["POST"])
+def remove_from_cart(request):
+    try:
+        if not request.session.session_key:
+            return JsonResponse({"message": "Invalid or Expired Session"}, status=status.HTTP_401_UNAUTHORIZED)
+        request.session.set_expiry(300)
+        user_id = request.session["user_id"]
+        item_id = request.data["itemID"]
+        order_id = request.session.get("order_id")
+        order_content = OrderContent.objects.get(fk_order_id=order_id, fk_menu_id=item_id)
+        ic(order_content.quantity)
+        order_content.quantity -= 1
+        if order_content.quantity == 0:
+            order_content.delete()
+            order = Orders.objects.get(pk=order_id)
+            order.delete()
+            del request.session["order_id"]
+        order_content.save()
+        return JsonResponse({"message": "Item Removed from Cart Successfully"})
+    except Exception as e:
+        ic(e)
+        return JsonResponse(
+            {"message": "Oops some error occured"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+
+@api_view(["POST"])
+def calculate_eta(request):
+    try:
+        if not request.session.session_key:
+            return JsonResponse({"message": "Invalid or Expired Session"}, status=status.HTTP_401_UNAUTHORIZED)
+        request.session.set_expiry(300)
+        user_id = request.session["user_id"]
+        order_id = request.data["orderID"]
+        order = Orders.objects.get(pk=order_id)
+        restaurant_id = order.fk_restaurant_id
+        restaurant = Restaurants.objects.get(pk=restaurant_id)
+        restaurant_latitude = restaurant.latitude
+        restaurant_longitude = restaurant.longitude
+        user = Users.objects.get(pk=user_id)
+        user_latitude = user.latitude
+        user_longitude = user.longitude
+        distance = geodesic((restaurant_latitude, restaurant_longitude), (user_latitude, user_longitude)).km
+        eta = distance / 0.5
+        return JsonResponse({"message": "ETA Calculated Successfully", "eta": eta})
+    except Exception as e:
+        ic(e)
+        return JsonResponse(
+            {"message": "Oops some error occured"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )

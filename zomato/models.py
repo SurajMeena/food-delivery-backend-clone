@@ -173,7 +173,6 @@ class Orders(models.Model):
     order_id = models.AutoField(primary_key=True)
     fk_user = models.ForeignKey('Users', models.DO_NOTHING, blank=True, null=True)
     fk_restaurant = models.ForeignKey('Restaurants', models.DO_NOTHING, blank=True, null=True)
-    order_total = models.FloatField()
     payment_method = models.CharField(max_length=100)
     order_status = models.CharField(max_length=10)
     created_at = models.DateTimeField()

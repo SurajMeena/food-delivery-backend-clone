@@ -10,9 +10,8 @@ urlpatterns = [
  path('getOrderHistory', views.get_order_history, name='getOrderHistory'),
  path('getTransactionHistory', views.user_trans_history, name='getTransactionHistory'),
  path('getUserDetails', views.get_user_details, name='getUserDetails'),
- path('pushOrder', views.push_order, name='pushOrder'),
- path('updateOrder', views.update_order_status, name='updateOrder')
-# TODO:
-# swagger documentation
-# order journey tracking/ETA
- ]
+ path('updateOrder', views.update_order, name='updateOrder'),
+ path('addToCart', views.add_to_cart, name='addToCart'),
+ path('removeFromCart', views.remove_from_cart, name='removeFromCart'),
+ path('calculateETA', views.calculate_eta, name='calculateETA'),
+]
