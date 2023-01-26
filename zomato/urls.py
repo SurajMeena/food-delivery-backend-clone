@@ -14,4 +14,6 @@ urlpatterns = [
  path('addToCart', views.add_to_cart, name='addToCart'),
  path('removeFromCart', views.remove_from_cart, name='removeFromCart'),
  path('calculateETA', views.calculate_eta, name='calculateETA'),
+ path('insertOrderJourney', views.insert_order_journey, name='insertOrderJourney'),
+ path('updateOrderJourney', views.update_order_journey, name='updateOrderJourney'),
 ]

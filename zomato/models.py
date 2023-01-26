@@ -163,6 +163,7 @@ class OrderJourney(models.Model):
     latitude = models.FloatField(blank=True, null=True)
     last_updated = models.DateTimeField(blank=True, null=True)
     longitude = models.FloatField(blank=True, null=True)
+    fk_order = models.ForeignKey('Orders', models.DO_NOTHING, blank=True, null=True)
 
     class Meta:
         managed = False
