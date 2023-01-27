@@ -161,7 +161,6 @@ def get_order_history(request):
             order_items = OrderContent.objects.filter(
                 fk_order_id=order.order_id
             ).values("fk_menu_id", "quantity")
-            ic(list(order_items))
             restrau_details = Restaurants.objects.filter(
                 pk=order.fk_restaurant_id
             ).values("name")
@@ -192,7 +191,6 @@ def get_order_history(request):
             }
         )
     except Exception as e:
-        ic(e)
         return JsonResponse(
             {"message": "Oops some error occured"},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -304,7 +302,7 @@ def update_order(request):
         # only runs when an order is moved from cart to placing order
         if payment_method is not None and order_status == "inProgress":
             delivery_executive = DeliveryExecutives.objects.order_by("?").first()
-            order.fk_exec_id = delivery_executive
+            order.fk_exec = delivery_executive
             order.payment_method = payment_method
             del request.session["order_id"]
         order.save()
@@ -431,7 +429,6 @@ def calculate_eta(request):
         eta = distance / 0.5
         return JsonResponse({"message": "ETA Calculated Successfully", "eta": round(eta/60)})
     except Exception as e:
-        ic(e)
         return JsonResponse(
             {"message": "Oops some error occured"},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
